@@ -1,96 +1,354 @@
 'use client';
-import { useState } from 'react';
+
+import React, { useState, useRef } from 'react';
+import { 
+  ShieldCheck, 
+  AlertTriangle, 
+  UploadCloud, 
+  Search, 
+  ExternalLink, 
+  RefreshCw, 
+  CheckCircle2, 
+  Sparkles,
+  Lock,
+  Cpu,
+  Moon,
+  Sun,
+  Image as ImageIcon,
+  Film
+} from 'lucide-react';
+
+interface Match {
+  title: string;
+  link: string;
+  thumbnail: string;
+}
+
+interface AnalysisResult {
+  status: string;
+  prediction: 'REAL' | 'FAKE';
+  confidence: number;
+  matches: Match[];
+}
 
 export default function Home() {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [result, setResult] = useState<any>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setSelectedFile(e.target.files[0]);
-      setResult(null); // Reset previous results
+  const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark');
+
+  const handleFileSelect = (selectedFile: File) => {
+    if (!selectedFile.type.startsWith('image/')) {
+      setError('Please upload a valid image file (JPEG, PNG, WEBP).');
+      return;
+    }
+    setError(null);
+    setResult(null);
+    setFile(selectedFile);
+    setPreviewUrl(URL.createObjectURL(selectedFile));
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFileSelect(e.dataTransfer.files[0]);
     }
   };
 
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => setIsDragging(false);
+
   const handleAnalyze = async () => {
-    if (!selectedFile) return;
+    if (!file) return;
     setLoading(true);
+    setError(null);
 
     const formData = new FormData();
-    formData.append('file', selectedFile);
+    formData.append('file', file);
 
     try {
-      // Send to FastAPI backend
-      const response = await fetch('http://localhost:8000/analyze-image', {
+      const res = await fetch('http://localhost:8000/analyze-image', {
         method: 'POST',
         body: formData,
       });
-      
-      const data = await response.json();
+
+      if (!res.ok) throw new Error(`Server returned status ${res.status}`);
+
+      const data = await res.json();
       setResult(data);
-    } catch (error) {
-      console.error("Error analyzing image:", error);
+    } catch (err: any) {
+      setError('Failed to connect to VeriSight AI engine. Ensure your backend server is active.');
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleReset = () => {
+    setFile(null);
+    setPreviewUrl(null);
+    setResult(null);
+    setError(null);
+  };
+
+  // Theme-based class helpers
+  const bgMain = theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900';
+  const bgHeader = theme === 'dark' ? 'bg-slate-900/80 border-slate-800' : 'bg-white/80 border-slate-200 shadow-sm';
+  const bgCard = theme === 'dark' ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-lg';
+  const textMuted = theme === 'dark' ? 'text-slate-400' : 'text-slate-500';
+  const dropzoneBg = theme === 'dark' ? 'bg-slate-950/40 border-slate-700/80' : 'bg-slate-50 border-slate-300';
+  const dropzoneHover = theme === 'dark' ? 'hover:border-slate-500' : 'hover:border-blue-400';
+
   return (
-    <main className="min-h-screen p-12 bg-gray-900 text-white font-sans">
-      <div className="max-w-3xl mx-auto space-y-8">
-        
-        {/* Header */}
-        <div className="text-center">
-          <h1 className="text-5xl font-bold tracking-tight text-blue-400">VeriSight</h1>
-          <p className="mt-4 text-gray-400 text-lg">AI Media Authenticity Engine</p>
-        </div>
+    <div className={`min-h-screen flex flex-col font-sans transition-colors duration-300 ${bgMain}`}>
+      {/* Top Navigation */}
+      <header className={`border-b backdrop-blur-md sticky top-0 z-50 transition-colors duration-300 ${bgHeader}`}>
+        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
+              <ShieldCheck className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <span className={`text-xl font-extrabold tracking-tight ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
+                VeriSight
+              </span>
+              <span className="ml-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500 border border-blue-500/20">
+                PRO ENGINE
+              </span>
+            </div>
+          </div>
 
-        {/* Upload Zone */}
-        <div className="border-2 border-dashed border-gray-600 rounded-xl p-10 text-center bg-gray-800">
-          <input 
-            type="file" 
-            accept="image/*" 
-            onChange={handleFileChange} 
-            className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700"
-          />
-          {selectedFile && (
+          <div className="flex items-center gap-6 text-sm">
+            <div className={`flex items-center gap-2 hidden sm:flex ${textMuted}`}>
+              <Cpu className="h-4 w-4 text-emerald-500" />
+              <span>EfficientNet-B0</span>
+            </div>
             <button 
-              onClick={handleAnalyze}
-              disabled={loading}
-              className="mt-6 px-6 py-3 bg-blue-500 hover:bg-blue-600 rounded-lg font-bold transition-all disabled:opacity-50"
+              onClick={toggleTheme} 
+              className={`p-2 rounded-full transition-colors ${theme === 'dark' ? 'hover:bg-slate-800 text-amber-400' : 'hover:bg-slate-100 text-indigo-500'}`}
             >
-              {loading ? 'Analyzing...' : 'Analyze Image'}
+              {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </button>
-          )}
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content Area */}
+      <main className="flex-1 max-w-5xl mx-auto px-6 py-12 w-full space-y-10">
+        
+        {/* Hero Section */}
+        <div className="text-center space-y-3">
+          <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-xs mb-2 ${theme === 'dark' ? 'bg-slate-800/80 border-slate-700/60 text-slate-300' : 'bg-blue-50 border-blue-100 text-blue-700'}`}>
+            <Sparkles className="h-3.5 w-3.5 text-blue-500" />
+            Next-Gen Neural Visual Authenticity Verification
+          </div>
+          <h1 className={`text-4xl sm:text-5xl font-black tracking-tight ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
+            Authenticate Media with <span className="bg-gradient-to-r from-blue-500 to-indigo-500 bg-clip-text text-transparent">Precision AI</span>
+          </h1>
+          <p className={`max-w-2xl mx-auto text-base sm:text-lg ${textMuted}`}>
+            Inspect files for generative artifacts, neural synthesis patterns, and retrieve source matches from global visual registries.
+          </p>
         </div>
 
-        {/* Results Dashboard */}
-        {result && (
-          <div className={`p-6 rounded-xl border ${result.prediction === 'FAKE' ? 'bg-red-900/20 border-red-500' : 'bg-green-900/20 border-green-500'}`}>
-            <h2 className="text-3xl font-bold mb-2">
-              Result: {result.prediction}
-            </h2>
-            <p className="text-xl opacity-80 mb-6">Confidence: {result.confidence}%</p>
+        {/* Upload & Inspection Panel */}
+        <div className={`border rounded-2xl p-6 sm:p-8 backdrop-blur-sm transition-colors duration-300 ${bgCard}`}>
+          
+          {/* Future-Proof Video Toggle */}
+          <div className="flex justify-center mb-6">
+            <div className={`inline-flex rounded-lg p-1 ${theme === 'dark' ? 'bg-slate-950 border border-slate-800' : 'bg-slate-100 border border-slate-200'}`}>
+              <button className="flex items-center gap-2 px-4 py-2 rounded-md bg-blue-500 text-white text-sm font-semibold shadow">
+                <ImageIcon className="h-4 w-4" /> Image Scan
+              </button>
+              <button className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold cursor-not-allowed ${textMuted}`} title="Video processing pipeline coming soon">
+                <Film className="h-4 w-4" /> Video Scan <span className="text-[10px] uppercase tracking-wider ml-1 opacity-60">(Soon)</span>
+              </button>
+            </div>
+          </div>
 
-            {/* Render Google Lens Matches if Fake */}
-            {result.prediction === 'FAKE' && result.matches.length > 0 && (
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold border-b border-gray-700 pb-2">Potential Source Images (Google Lens)</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {result.matches.map((match: any, idx: number) => (
-                    <a key={idx} href={match.link} target="_blank" rel="noreferrer" className="block p-4 bg-gray-800 rounded-lg hover:bg-gray-700 transition">
-                      <img src={match.thumbnail} alt="Source match" className="w-full h-32 object-cover rounded mb-3" />
-                      <p className="text-sm truncate text-gray-300">{match.title}</p>
-                    </a>
-                  ))}
+          {!previewUrl ? (
+            <div
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onClick={() => fileInputRef.current?.click()}
+              className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-all duration-200 flex flex-col items-center justify-center gap-4 ${
+                isDragging 
+                  ? 'border-blue-500 bg-blue-500/5 scale-[0.99]' 
+                  : `${dropzoneBg} ${dropzoneHover}`
+              }`}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png, image/jpeg, image/webp"
+                className="hidden"
+                onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
+              />
+              <div className={`p-4 rounded-full border shadow-inner ${theme === 'dark' ? 'bg-slate-800/80 border-slate-700 text-blue-400' : 'bg-white border-slate-200 text-blue-500'}`}>
+                <UploadCloud className="h-8 w-8" />
+              </div>
+              <div>
+                <p className={`text-base font-semibold ${theme === 'dark' ? 'text-slate-200' : 'text-slate-700'}`}>
+                  Click to browse or drop high-resolution images here
+                </p>
+                <p className={`text-xs mt-1 ${textMuted}`}>
+                  Supports PNG, JPG, JPEG, WEBP up to 25MB
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Media Preview Stage */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                <div className={`relative rounded-xl overflow-hidden border aspect-square flex items-center justify-center group ${theme === 'dark' ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
+                  <img src={previewUrl} alt="Inspect Target" className="max-h-full max-w-full object-contain" />
+                  <div className={`absolute top-3 left-3 backdrop-blur-md px-2.5 py-1 rounded-md text-xs font-mono border ${theme === 'dark' ? 'bg-slate-900/80 text-slate-300 border-slate-700/60' : 'bg-white/80 text-slate-700 border-slate-200'}`}>
+                    {file?.name}
+                  </div>
+                </div>
+
+                {/* Analysis Actions & Status */}
+                <div className="flex flex-col justify-center space-y-4">
+                  <div>
+                    <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Target Staged for Inspection</h3>
+                    <p className={`text-sm mt-1 ${textMuted}`}>
+                      File Size: {file ? (file.size / (1024 * 1024)).toFixed(2) : 0} MB
+                    </p>
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      onClick={handleAnalyze}
+                      disabled={loading}
+                      className="flex-1 py-3.5 px-6 rounded-xl font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/25 transition disabled:opacity-50 flex items-center justify-center gap-2 text-sm"
+                    >
+                      {loading ? (
+                        <><RefreshCw className="h-4 w-4 animate-spin" /> Running Neural Classification...</>
+                      ) : (
+                        <><Search className="h-4 w-4" /> Run Authenticity Scan</>
+                      )}
+                    </button>
+
+                    <button
+                      onClick={handleReset}
+                      disabled={loading}
+                      className={`p-3.5 rounded-xl border transition text-sm disabled:opacity-50 ${theme === 'dark' ? 'border-slate-700 bg-slate-800/60 hover:bg-slate-800 text-slate-300' : 'border-slate-300 bg-white hover:bg-slate-50 text-slate-700'}`}
+                      title="Upload new media"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  {error && (
+                    <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-xs flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 shrink-0" />
+                      {error}
+                    </div>
+                  )}
                 </div>
               </div>
-            )}
-          </div>
-        )}
 
-      </div>
-    </main>
+              {/* Scan Results Panel */}
+              {result && (
+                <div className={`pt-6 border-t space-y-6 ${theme === 'dark' ? 'border-slate-800' : 'border-slate-200'}`}>
+                  <div
+                    className={`p-6 rounded-xl border ${
+                      result.prediction === 'FAKE'
+                        ? 'bg-rose-500/10 border-rose-500/30'
+                        : 'bg-emerald-500/10 border-emerald-500/30'
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        {result.prediction === 'FAKE' ? (
+                          <div className="p-3 rounded-xl bg-rose-500/20 text-rose-500 border border-rose-500/30">
+                            <AlertTriangle className="h-7 w-7" />
+                          </div>
+                        ) : (
+                          <div className="p-3 rounded-xl bg-emerald-500/20 text-emerald-600 border border-emerald-500/30">
+                            <CheckCircle2 className="h-7 w-7" />
+                          </div>
+                        )}
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h2 className={`text-2xl font-black tracking-tight ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
+                              {result.prediction === 'FAKE' ? 'FAKE (AI Generated / Manipulated)' : 'REAL (Authentic Image)'}
+                            </h2>
+                          </div>
+                          <p className={`text-xs mt-0.5 ${textMuted}`}>
+                            Status: Classification inference resolved with high statistical confidence.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <div className={`text-3xl font-black tracking-tight ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
+                          {result.confidence}%
+                        </div>
+                        <p className={`text-xs font-medium ${textMuted}`}>Confidence Metric</p>
+                      </div>
+                    </div>
+
+                    {/* Visual Meter */}
+                    <div className={`mt-5 w-full rounded-full h-2 overflow-hidden ${theme === 'dark' ? 'bg-slate-900' : 'bg-slate-200'}`}>
+                      <div
+                        className={`h-full transition-all duration-500 rounded-full ${result.prediction === 'FAKE' ? 'bg-rose-500' : 'bg-emerald-500'}`}
+                        style={{ width: `${result.confidence}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Reverse Search Visual Matches */}
+                  {result.prediction === 'FAKE' && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className={`text-sm font-semibold uppercase tracking-wider flex items-center gap-2 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
+                          <Search className="h-4 w-4 text-blue-500" />
+                          Source Image Registry (Google Lens)
+                        </h4>
+                        <span className={`text-xs ${textMuted}`}>Visual Similarity Search</span>
+                      </div>
+
+                      {result.matches && result.matches.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                          {result.matches.map((match, idx) => (
+                            <a key={idx} href={match.link} target="_blank" rel="noreferrer" className={`group p-3 rounded-xl border transition flex flex-col gap-3 ${theme === 'dark' ? 'bg-slate-950 border-slate-800 hover:border-blue-500/50' : 'bg-slate-50 border-slate-200 hover:border-blue-400'}`}>
+                              <div className={`aspect-video w-full rounded-lg overflow-hidden relative ${theme === 'dark' ? 'bg-slate-900' : 'bg-slate-200'}`}>
+                                <img src={match.thumbnail} alt={match.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                              </div>
+                              <div className="flex items-start justify-between gap-2">
+                                <p className={`text-xs font-medium line-clamp-2 leading-relaxed ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
+                                  {match.title}
+                                </p>
+                                <ExternalLink className="h-3.5 w-3.5 text-slate-500 shrink-0 group-hover:text-blue-500 transition mt-0.5" />
+                              </div>
+                            </a>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className={`p-6 rounded-xl border text-center text-xs ${theme === 'dark' ? 'bg-slate-950 border-slate-800/80 text-slate-500' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>
+                          No duplicate source links detected. This indicates the image may be completely synthesized from a text prompt (e.g. Midjourney, DALL-E) rather than an altered face composite.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
   );
 }
