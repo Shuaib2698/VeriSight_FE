@@ -29,6 +29,7 @@ interface AnalysisResult {
   prediction: 'REAL' | 'FAKE';
   confidence: number;
   matches: Match[];
+  metadata_warning?: string; // Add this line
 }
 
 export default function Home() {
@@ -308,6 +309,17 @@ export default function Home() {
                       />
                     </div>
                   </div>
+
+                  {/* NEW: Metadata Warning Alert */}
+                  {result.metadata_warning && (
+                    <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-500 text-sm flex items-start gap-3">
+                      <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-semibold block mb-1">EXIF Forensics Alert</span>
+                        {result.metadata_warning}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Reverse Search Visual Matches */}
                   {result.prediction === 'FAKE' && (
