@@ -29,7 +29,7 @@ interface AnalysisResult {
   prediction: 'REAL' | 'FAKE';
   confidence: number;
   matches: Match[];
-  metadata_warning?: string; // Add this line
+  metadata_warning?: string;
 }
 
 export default function Home() {
@@ -40,6 +40,7 @@ export default function Home() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark');
@@ -70,29 +71,63 @@ export default function Home() {
 
   const handleDragLeave = () => setIsDragging(false);
 
+  // RESTORED: The function that communicates with the Python backend
   const handleAnalyze = async () => {
     if (!file) return;
+    
     setLoading(true);
     setError(null);
-
-    const formData = new FormData();
-    formData.append('file', file);
-
+    setResult(null);
+    
     try {
-      const res = await fetch('http://localhost:8000/analyze-image', {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await fetch('http://localhost:8000/analyze-image', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) throw new Error('Analysis failed');
+      
+      const data = await response.json();
+      setResult(data);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to connect to the backend. Is FastAPI running?');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDownloadReport = async () => {
+    if (!file || !result) return;
+    setDownloadingPdf(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('result_data', JSON.stringify(result));
+
+      const response = await fetch('http://localhost:8000/generate-report', {
         method: 'POST',
         body: formData,
       });
 
-      if (!res.ok) throw new Error(`Server returned status ${res.status}`);
+      if (!response.ok) throw new Error('PDF Generation failed');
 
-      const data = await res.json();
-      setResult(data);
-    } catch (err: any) {
-      setError('Failed to connect to VeriSight AI engine. Ensure your backend server is active.');
-      console.error(err);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `VeriSight_Forensic_Report.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error downloading report:', err);
     } finally {
-      setLoading(false);
+      setDownloadingPdf(false);
     }
   };
 
@@ -133,7 +168,7 @@ export default function Home() {
           <div className="flex items-center gap-6 text-sm">
             <div className={`flex items-center gap-2 hidden sm:flex ${textMuted}`}>
               <Cpu className="h-4 w-4 text-emerald-500" />
-              <span>EfficientNet-B0</span>
+              <span>Vision Transformer (ViT)</span>
             </div>
             <button 
               onClick={toggleTheme} 
@@ -310,7 +345,7 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* NEW: Metadata Warning Alert */}
+                  {/* Metadata Warning Alert */}
                   {result.metadata_warning && (
                     <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-500 text-sm flex items-start gap-3">
                       <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
@@ -355,6 +390,25 @@ export default function Home() {
                       )}
                     </div>
                   )}
+
+                  {/* CORRECTED PLACEMENT: Download Certificate Action */}
+                  <button
+                    onClick={handleDownloadReport}
+                    disabled={downloadingPdf}
+                    className="w-full mt-4 flex items-center justify-center gap-2 py-3 px-5 rounded-xl font-medium text-sm transition-all duration-200 shadow-sm bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 disabled:opacity-50"
+                  >
+                    {downloadingPdf ? (
+                      <span>Generating Certified PDF...</span>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span>Download Forensic Certificate (PDF)</span>
+                      </>
+                    )}
+                  </button>
+
                 </div>
               )}
             </div>
