@@ -2,20 +2,8 @@
 
 import React, { useState, useRef } from 'react';
 import { 
-  ShieldCheck, 
-  AlertTriangle, 
-  UploadCloud, 
-  Search, 
-  ExternalLink, 
-  RefreshCw, 
-  CheckCircle2, 
-  Sparkles,
-  Lock,
-  Cpu,
-  Moon,
-  Sun,
-  Image as ImageIcon,
-  Film
+  ShieldCheck, AlertTriangle, UploadCloud, Search, ExternalLink, RefreshCw, 
+  CheckCircle2, Sparkles, Cpu, Moon, Sun, Image as ImageIcon, Film, ThumbsUp, ThumbsDown
 } from 'lucide-react';
 
 interface Match {
@@ -30,6 +18,7 @@ interface AnalysisResult {
   confidence: number;
   matches: Match[];
   metadata_warning?: string;
+  image_hash: string;
 }
 
 export default function Home() {
@@ -37,10 +26,12 @@ export default function Home() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [scanProgress, setScanProgress] = useState(0); 
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [feedbackStatus, setFeedbackStatus] = useState<'idle' | 'submitting' | 'submitted'>('idle');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark');
@@ -52,6 +43,7 @@ export default function Home() {
     }
     setError(null);
     setResult(null);
+    setFeedbackStatus('idle'); 
     setFile(selectedFile);
     setPreviewUrl(URL.createObjectURL(selectedFile));
   };
@@ -71,14 +63,23 @@ export default function Home() {
 
   const handleDragLeave = () => setIsDragging(false);
 
-  // RESTORED: The function that communicates with the Python backend
   const handleAnalyze = async () => {
     if (!file) return;
     
     setLoading(true);
+    setScanProgress(0);
     setError(null);
     setResult(null);
+    setFeedbackStatus('idle'); 
     
+    // Simulate network progress up to 90% while waiting for APIs
+    const progressInterval = setInterval(() => {
+      setScanProgress((prev) => {
+        if (prev >= 90) return prev;
+        return prev + Math.floor(Math.random() * 10) + 5;
+      });
+    }, 500);
+
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -91,12 +92,21 @@ export default function Home() {
       if (!response.ok) throw new Error('Analysis failed');
       
       const data = await response.json();
-      setResult(data);
+
+      // Complete the progress bar smoothly
+      clearInterval(progressInterval);
+      setScanProgress(100);
+      
+      setTimeout(() => {
+        setResult(data);
+        setLoading(false);
+      }, 400);
+
     } catch (err) {
       console.error(err);
-      setError('Failed to connect to the backend. Is FastAPI running?');
-    } finally {
+      clearInterval(progressInterval);
       setLoading(false);
+      setError('Failed to connect to the backend. Is FastAPI running?');
     }
   };
 
@@ -131,14 +141,36 @@ export default function Home() {
     }
   };
 
+  const handleFeedback = async (isCorrect: boolean) => {
+    if (!result?.image_hash) return;
+    
+    setFeedbackStatus('submitting');
+    try {
+      await fetch('http://localhost:8000/submit-feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image_hash: result.image_hash,
+          prediction: result.prediction,
+          is_correct: isCorrect
+        })
+      });
+      setFeedbackStatus('submitted');
+    } catch (err) {
+      console.error('Feedback failed:', err);
+      setFeedbackStatus('idle');
+    }
+  };
+
   const handleReset = () => {
     setFile(null);
     setPreviewUrl(null);
     setResult(null);
     setError(null);
+    setScanProgress(0);
+    setFeedbackStatus('idle');
   };
 
-  // Theme-based class helpers
   const bgMain = theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900';
   const bgHeader = theme === 'dark' ? 'bg-slate-900/80 border-slate-800' : 'bg-white/80 border-slate-200 shadow-sm';
   const bgCard = theme === 'dark' ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-lg';
@@ -148,7 +180,6 @@ export default function Home() {
 
   return (
     <div className={`min-h-screen flex flex-col font-sans transition-colors duration-300 ${bgMain}`}>
-      {/* Top Navigation */}
       <header className={`border-b backdrop-blur-md sticky top-0 z-50 transition-colors duration-300 ${bgHeader}`}>
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -180,10 +211,7 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Main Content Area */}
       <main className="flex-1 max-w-5xl mx-auto px-6 py-12 w-full space-y-10">
-        
-        {/* Hero Section */}
         <div className="text-center space-y-3">
           <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-xs mb-2 ${theme === 'dark' ? 'bg-slate-800/80 border-slate-700/60 text-slate-300' : 'bg-blue-50 border-blue-100 text-blue-700'}`}>
             <Sparkles className="h-3.5 w-3.5 text-blue-500" />
@@ -197,10 +225,7 @@ export default function Home() {
           </p>
         </div>
 
-        {/* Upload & Inspection Panel */}
         <div className={`border rounded-2xl p-6 sm:p-8 backdrop-blur-sm transition-colors duration-300 ${bgCard}`}>
-          
-          {/* Future-Proof Video Toggle */}
           <div className="flex justify-center mb-6">
             <div className={`inline-flex rounded-lg p-1 ${theme === 'dark' ? 'bg-slate-950 border border-slate-800' : 'bg-slate-100 border border-slate-200'}`}>
               <button className="flex items-center gap-2 px-4 py-2 rounded-md bg-blue-500 text-white text-sm font-semibold shadow">
@@ -245,7 +270,6 @@ export default function Home() {
             </div>
           ) : (
             <div className="space-y-6">
-              {/* Media Preview Stage */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
                 <div className={`relative rounded-xl overflow-hidden border aspect-square flex items-center justify-center group ${theme === 'dark' ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
                   <img src={previewUrl} alt="Inspect Target" className="max-h-full max-w-full object-contain" />
@@ -254,7 +278,6 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* Analysis Actions & Status */}
                 <div className="flex flex-col justify-center space-y-4">
                   <div>
                     <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Target Staged for Inspection</h3>
@@ -270,7 +293,7 @@ export default function Home() {
                       className="flex-1 py-3.5 px-6 rounded-xl font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/25 transition disabled:opacity-50 flex items-center justify-center gap-2 text-sm"
                     >
                       {loading ? (
-                        <><RefreshCw className="h-4 w-4 animate-spin" /> Running Neural Classification...</>
+                        <><RefreshCw className="h-4 w-4 animate-spin" /> Analyzing Media...</>
                       ) : (
                         <><Search className="h-4 w-4" /> Run Authenticity Scan</>
                       )}
@@ -285,6 +308,23 @@ export default function Home() {
                       <RefreshCw className="h-4 w-4" />
                     </button>
                   </div>
+                  
+                  {loading && (
+                    <div className={`mt-4 p-4 rounded-xl border ${theme === 'dark' ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="flex justify-between text-xs font-medium mb-2">
+                        <span className={`${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>
+                          {scanProgress < 50 ? 'Running AI Classification...' : 'Querying Global Registries...'}
+                        </span>
+                        <span className="text-blue-500">{scanProgress}%</span>
+                      </div>
+                      <div className={`w-full rounded-full h-2 ${theme === 'dark' ? 'bg-slate-800' : 'bg-slate-200'}`}>
+                        <div
+                          className="bg-blue-500 h-2 rounded-full transition-all duration-300 ease-out"
+                          style={{ width: `${scanProgress}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  )}
 
                   {error && (
                     <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-xs flex items-center gap-2">
@@ -295,7 +335,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Scan Results Panel */}
               {result && (
                 <div className={`pt-6 border-t space-y-6 ${theme === 'dark' ? 'border-slate-800' : 'border-slate-200'}`}>
                   <div
@@ -336,7 +375,6 @@ export default function Home() {
                       </div>
                     </div>
 
-                    {/* Visual Meter */}
                     <div className={`mt-5 w-full rounded-full h-2 overflow-hidden ${theme === 'dark' ? 'bg-slate-900' : 'bg-slate-200'}`}>
                       <div
                         className={`h-full transition-all duration-500 rounded-full ${result.prediction === 'FAKE' ? 'bg-rose-500' : 'bg-emerald-500'}`}
@@ -345,7 +383,6 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Metadata Warning Alert */}
                   {result.metadata_warning && (
                     <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-500 text-sm flex items-start gap-3">
                       <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
@@ -356,7 +393,6 @@ export default function Home() {
                     </div>
                   )}
 
-                  {/* Reverse Search Visual Matches */}
                   {result.prediction === 'FAKE' && (
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
@@ -391,23 +427,48 @@ export default function Home() {
                     </div>
                   )}
 
-                  {/* CORRECTED PLACEMENT: Download Certificate Action */}
-                  <button
-                    onClick={handleDownloadReport}
-                    disabled={downloadingPdf}
-                    className="w-full mt-4 flex items-center justify-center gap-2 py-3 px-5 rounded-xl font-medium text-sm transition-all duration-200 shadow-sm bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 disabled:opacity-50"
-                  >
-                    {downloadingPdf ? (
-                      <span>Generating Certified PDF...</span>
-                    ) : (
-                      <>
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        <span>Download Forensic Certificate (PDF)</span>
-                      </>
-                    )}
-                  </button>
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <button
+                      onClick={handleDownloadReport}
+                      disabled={downloadingPdf}
+                      className="flex-1 flex items-center justify-center gap-2 py-3 px-5 rounded-xl font-medium text-sm transition-all duration-200 shadow-sm bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 disabled:opacity-50"
+                    >
+                      {downloadingPdf ? (
+                        <span>Generating...</span>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          <span>Download Certificate</span>
+                        </>
+                      )}
+                    </button>
+
+                    <div className={`flex-1 flex items-center justify-between px-5 py-2 rounded-xl border ${theme === 'dark' ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      {feedbackStatus === 'idle' && (
+                        <>
+                          <span className={`text-sm font-medium ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>Did we get this right?</span>
+                          <div className="flex gap-2">
+                            <button onClick={() => handleFeedback(true)} className="p-2 rounded-lg hover:bg-emerald-500/20 text-emerald-500 transition-colors" title="Yes, correct">
+                              <ThumbsUp className="h-4 w-4" />
+                            </button>
+                            <button onClick={() => handleFeedback(false)} className="p-2 rounded-lg hover:bg-rose-500/20 text-rose-500 transition-colors" title="No, incorrect">
+                              <ThumbsDown className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </>
+                      )}
+                      {feedbackStatus === 'submitting' && (
+                        <span className="text-sm font-medium text-slate-500 w-full text-center">Submitting feedback...</span>
+                      )}
+                      {feedbackStatus === 'submitted' && (
+                        <span className="text-sm font-medium text-emerald-500 flex items-center justify-center gap-2 w-full">
+                          <CheckCircle2 className="h-4 w-4" /> Thank you for your feedback!
+                        </span>
+                      )}
+                    </div>
+                  </div>
 
                 </div>
               )}
